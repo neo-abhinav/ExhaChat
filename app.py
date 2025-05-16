@@ -334,7 +334,7 @@ CHAT_HTML = """
     </div>
     <script>
         var socket = io();
-        var name = "{{ name|escapejs }}";
+        var name = {{ name|tojson }};
         var chatBox = document.getElementById('chat-box');
         function scrollToBottom() {
             chatBox.scrollTop = chatBox.scrollHeight;
