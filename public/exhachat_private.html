@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ExhaChat — Real-time Chat</title>
+<style>
+:root{--bg:#0f172a;--panel:#0b1220;--muted:#94a3b8;--accent:#38bdf8}
+*{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+body{margin:0;background:linear-gradient(180deg,#071233 0%, #041022 100%);color:#e6eef8;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.container{width:100%;max-width:1100px;display:grid;grid-template-columns:1fr 320px;gap:20px}
+@media(max-width:768px){
+  body{padding:0}
+  .container{grid-template-columns:1fr;gap:0;max-width:100%;height:100vh}
+}
+.panel{background:rgba(255,255,255,0.02);padding:18px;border-radius:12px;box-shadow:0 8px 30px rgba(2,6,23,0.6)}
+@media(max-width:768px){
+  .panel{border-radius:0;height:100vh;padding:12px}
+  .panel.user-list{position:fixed;left:0;top:0;width:280px;height:100vh;z-index:1000;transform:translateX(-100%);transition:transform 0.3s;box-shadow:4px 0 20px rgba(0,0,0,0.5)}
+  .panel.user-list.open{transform:translateX(0)}
+}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.header h1{margin:0;font-size:20px;color:var(--accent)}
+.header .small{color:var(--muted);font-size:13px}
+.menu-btn{display:none;background:rgba(255,255,255,0.1);border:none;color:#e6eef8;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:18px}
+@media(max-width:768px){
+  .menu-btn{display:block}
+  .header .small{display:none}
+}
+.status{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:8px}
+.status.connected{background:#10b981}
+.status.disconnected{background:#ef4444}
+.chat-tabs{display:flex;gap:8px;margin-bottom:12px;overflow-x:auto;padding-bottom:8px}
+.chat-tab{padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.03);cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px;border:1px solid transparent;transition:all 0.2s}
+.chat-tab:hover{background:rgba(255,255,255,0.06)}
+.chat-tab.active{background:var(--accent);color:#001019;border-color:var(--accent)}
+.chat-tab .close{margin-left:4px;opacity:0.6;font-weight:bold}
+.chat-tab .close:hover{opacity:1}
+.chat-window{height:58vh;overflow:auto;padding:12px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent)}
+@media(max-width:768px){
+  .chat-window{height:calc(100vh - 220px)}
+}
+.msg{margin-bottom:12px;display:flex;gap:10px;align-items:flex-end}
+.msg.me{justify-content:flex-end}
+.msg.private{opacity:0.95}
+.avatar{width:36px;height:36px;border-radius:8px;background:#0ea5a6;display:flex;align-items:center;justify-content:center;color:#031124;font-weight:700;flex-shrink:0}
+.bubble{max-width:70%;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.03);line-height:1.3}
+.msg.me .bubble{background:linear-gradient(90deg,#06b6d4,#38bdf8);color:#001019}
+.msg.private .bubble{background:rgba(147,51,234,0.15);border:1px solid rgba(147,51,234,0.3)}
+.msg.me.private .bubble{background:linear-gradient(90deg,#a855f7,#c084fc);color:#fff}
+.timestamp{font-size:11px;color:var(--muted);margin-top:4px}
+.chat-input{display:flex;gap:8px;margin-top:12px}
+.chat-input input{flex:1;padding:10px;border-radius:8px;border:none;background:#071232;color:#e6eef8}
+.chat-input button{padding:10px 14px;border-radius:8px;border:none;background:var(--accent);color:#001019;cursor:pointer}
+.user-list{padding:12px;border-radius:8px;height:66vh;overflow:auto;background:rgba(255,255,255,0.01)}
+.user-list h3{margin-top:0;color:var(--accent)}
+.user-item{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;margin-bottom:8px;background:rgba(255,255,255,0.01);cursor:pointer;transition:all 0.2s}
+.user-item:hover{background:rgba(255,255,255,0.06)}
+.user-item.me{cursor:default}
+.user-item.me:hover{background:rgba(255,255,255,0.01)}
+.lock-screen{min-height:60vh;display:flex;align-items:center;justify-content:center}
+.form{width:360px;background:rgba(255,255,255,0.02);padding:18px;border-radius:12px}
+.form input{width:100%;padding:10px;margin-top:8px;border-radius:8px;border:none;background:#071232;color:#e6eef8}
+.form button{margin-top:10px;padding:10px;width:100%;border-radius:8px;border:none;background:var(--accent);color:#001019;cursor:pointer}
+.notice{color:var(--muted);font-size:13px;margin-top:8px}
+.typing{color:var(--accent);font-size:13px;margin-top:6px}
+.footer{margin-top:14px;text-align:center;color:var(--muted);font-size:12px}
+@media(max-width:768px){
+  .footer{display:none}
+}
+.mobile-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:999}
+@media(max-width:768px){
+  .mobile-overlay.show{display:block}
+}
+.badge{background:#ef4444;color:#fff;border-radius:10px;padding:2px 6px;font-size:11px;font-weight:bold;margin-left:4px}
+</style>
+</head>
+<body>
+<div class="container" id="app" style="display:none">
+  <div class="mobile-overlay" id="mobileOverlay"></div>
+  <div class="panel">
+    <div class="header">
+      <button class="menu-btn" id="menuBtn">☰</button>
+      <h1>ExhaChat 🔆 <span class="status disconnected" id="connectionStatus"></span></h1>
+      <div class="small">Real-time Chat</div>
+    </div>
+    <div class="chat-tabs" id="chatTabs"></div>
+    <div id="chat" class="chat-window" aria-live="polite"></div>
+    <div id="typing" class="typing" style="display:none"></div>
+    <div class="chat-input">
+      <input id="messageInput" placeholder="Type a message... (press Enter to send)" autocomplete="off" />
+      <button id="sendBtn">Send</button>
+    </div>
+    <div class="footer">Real-time chat across all devices • Password: <strong>Seashore</strong> 🔐</div>
+  </div>
+  <div class="panel user-list">
+    <h3>Users Online</h3>
+    <div id="users"></div>
+    <hr style="border:none;height:1px;background:rgba(255,255,255,0.02);margin:12px 0">
+    <div style="color:var(--muted);font-size:13px">Your name: <strong id="myName"></strong></div>
+    <button id="logout" style="margin-top:10px;padding:8px;border-radius:8px;border:none;background:#334155;color:#e6eef8;cursor:pointer">Logout</button>
+  </div>
+</div>
+
+<div class="lock-screen" id="loginScreen">
+  <div class="form">
+    <h2 style="margin:0">Welcome to ExhaChat 👋</h2>
+    <div class="notice">Enter your name and the password to join the chat.</div>
+    <input id="nameField" placeholder="Your display name" />
+    <input id="passwordField" placeholder="Password" type="password" />
+    <button id="loginBtn">Join Chat</button>
+    <div id="loginMsg" class="notice"></div>
+  </div>
+</div>
+
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script>
+const PASSWORD = "Seashore";
+const SERVER_URL = "http://localhost:3000"; // Change this to your server URL
+
+// Socket.IO connection
+const socket = io(SERVER_URL);
+
+let myName = null;
+let myId = localStorage.getItem("exha_id") || Math.random().toString(36).slice(2,9);
+let messages = [];
+let privateMessages = {};
+let users = {};
+let activeChat = "group";
+let unreadCounts = {};
+
+function formatTime(ts){ const d=new Date(ts); return d.toLocaleTimeString(); }
+
+const app = document.getElementById("app");
+const loginScreen = document.getElementById("loginScreen");
+const chatEl = document.getElementById("chat");
+const usersEl = document.getElementById("users");
+const myNameEl = document.getElementById("myName");
+const typingEl = document.getElementById("typing");
+const loginMsg = document.getElementById("loginMsg");
+const chatTabsEl = document.getElementById("chatTabs");
+const menuBtn = document.getElementById("menuBtn");
+const mobileOverlay = document.getElementById("mobileOverlay");
+const userListPanel = document.querySelector(".user-list");
+const connectionStatus = document.getElementById("connectionStatus");
+
+// Mobile menu toggle
+menuBtn.addEventListener("click", () => {
+  userListPanel.classList.add("open");
+  mobileOverlay.classList.add("show");
+});
+
+mobileOverlay.addEventListener("click", () => {
+  userListPanel.classList.remove("open");
+  mobileOverlay.classList.remove("show");
+});
+
+// Check for saved login
+if(localStorage.getItem("exha_name")) {
+  myName = localStorage.getItem("exha_name");
+  attemptAutoLogin();
+}
+
+// Socket event handlers
+socket.on('connect', () => {
+  connectionStatus.className = "status connected";
+  if(myName) {
+    socket.emit('login', { name: myName, password: PASSWORD, userId: myId });
+  }
+});
+
+socket.on('disconnect', () => {
+  connectionStatus.className = "status disconnected";
+});
+
+socket.on('login_success', (data) => {
+  localStorage.setItem("exha_id", myId);
+  messages = data.messages || [];
+  
+  // Load private messages
+  if(data.privateMessages) {
+    data.privateMessages.forEach(([key, msgs]) => {
+      const [id1, id2] = key.split('_');
+      const otherId = id1 === myId ? id2 : id1;
+      if(!privateMessages[otherId]) privateMessages[otherId] = [];
+      msgs.forEach(msg => {
+        if(!privateMessages[otherId].find(m => m.id === msg.id)) {
+          privateMessages[otherId].push(msg);
+        }
+      });
+    });
+  }
+  
+  showApp();
+});
+
+socket.on('login_failed', (data) => {
+  loginMsg.textContent = data.message;
+});
+
+socket.on('new_message', (message) => {
+  if(!messages.find(m => m.id === message.id)) {
+    messages.push(message);
+    if(activeChat === "group") renderMessages();
+  }
+});
+
+socket.on('new_private_message', (message) => {
+  const otherUserId = (message.fromId === myId) ? message.toId : message.fromId;
+  if(!privateMessages[otherUserId]) privateMessages[otherUserId] = [];
+  if(!privateMessages[otherUserId].find(m => m.id === message.id)) {
+    privateMessages[otherUserId].push(message);
+    
+    if(activeChat !== otherUserId && message.fromId !== myId) {
+      unreadCounts[otherUserId] = (unreadCounts[otherUserId] || 0) + 1;
+      renderTabs();
+    }
+    
+    if(activeChat === otherUserId) renderMessages();
+  }
+});
+
+socket.on('user_joined', (data) => {
+  users = {};
+  data.users.forEach(u => {
+    users[u.id] = { name: u.name, ts: Date.now() };
+  });
+  renderUsers();
+  renderTabs();
+});
+
+socket.on('user_left', (data) => {
+  users = {};
+  data.users.forEach(u => {
+    users[u.id] = { name: u.name, ts: Date.now() };
+  });
+  renderUsers();
+  renderTabs();
+});
+
+socket.on('user_typing', (data) => {
+  showTyping(data.name, data.chatId);
+});
+
+socket.on('user_stopped_typing', (data) => {
+  hideTyping();
+});
+
+// Typing handlers
+let typingTimeout = null;
+const msgInput = document.getElementById("messageInput");
+msgInput.addEventListener("input", () => {
+  if(msgInput.value.length > 0) {
+    socket.emit('typing', { chatId: activeChat });
+  } else {
+    socket.emit('stopped_typing');
+  }
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => socket.emit('stopped_typing'), 2000);
+});
+
+function showTyping(name, chatId){
+  if(!name || name === myName) return;
+  if(chatId && chatId !== activeChat) return;
+  typingEl.style.display = "block";
+  typingEl.textContent = name + " is typing...";
+}
+
+function hideTyping(){ 
+  typingEl.style.display = "none"; 
+  typingEl.textContent = ""; 
+}
+
+function sendMessage(text){
+  if(!text || !text.trim()) return;
+  if(activeChat === "group") {
+    socket.emit('send_message', { text: text.trim() });
+  } else {
+    socket.emit('send_private_message', { toId: activeChat, text: text.trim() });
+  }
+}
+
+function renderMessages(){
+  chatEl.innerHTML = "";
+  const msgs = activeChat === "group" ? messages : (privateMessages[activeChat] || []);
+  
+  msgs.forEach(m => {
+    const me = (m.fromId === myId);
+    const div = document.createElement("div");
+    div.className = "msg " + (me ? "me" : "") + (activeChat !== "group" ? " private" : "");
+    const avatar = document.createElement("div");
+    avatar.className = "avatar";
+    avatar.textContent = (m.from || "U").slice(0,2).toUpperCase();
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.innerHTML = "<strong>" + escapeHtml(m.from) + "</strong><br>" + escapeHtml(m.text) + "<div class='timestamp'>" + formatTime(m.ts) + "</div>";
+    if(me){ div.appendChild(bubble); div.appendChild(avatar); }
+    else { div.appendChild(avatar); div.appendChild(bubble); }
+    chatEl.appendChild(div);
+  });
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function renderTabs(){
+  chatTabsEl.innerHTML = "";
+  
+  const groupTab = document.createElement("div");
+  groupTab.className = "chat-tab" + (activeChat === "group" ? " active" : "");
+  groupTab.innerHTML = "🌐 Group Chat";
+  groupTab.onclick = () => switchChat("group");
+  chatTabsEl.appendChild(groupTab);
+  
+  for(let userId in privateMessages) {
+    if(!users[userId]) continue;
+    const tab = document.createElement("div");
+    tab.className = "chat-tab" + (activeChat === userId ? " active" : "");
+    const unread = unreadCounts[userId] || 0;
+    tab.innerHTML = "💬 " + escapeHtml(users[userId].name) + (unread > 0 ? "<span class='badge'>" + unread + "</span>" : "") + "<span class='close' onclick='event.stopPropagation(); closePrivateChat(\"" + userId + "\")'>×</span>";
+    tab.onclick = () => switchChat(userId);
+    chatTabsEl.appendChild(tab);
+  }
+}
+
+function switchChat(chatId){
+  activeChat = chatId;
+  if(chatId !== "group") unreadCounts[chatId] = 0;
+  renderTabs();
+  renderMessages();
+  msgInput.placeholder = chatId === "group" ? "Type a message..." : "Type a private message to " + users[chatId].name + "...";
+}
+
+function closePrivateChat(userId){
+  delete privateMessages[userId];
+  delete unreadCounts[userId];
+  if(activeChat === userId) activeChat = "group";
+  renderTabs();
+  renderMessages();
+}
+window.closePrivateChat = closePrivateChat;
+
+function startPrivateChat(userId){
+  if(userId === myId) return;
+  if(!privateMessages[userId]) privateMessages[userId] = [];
+  switchChat(userId);
+  userListPanel.classList.remove("open");
+  mobileOverlay.classList.remove("show");
+}
+
+function renderUsers(){
+  usersEl.innerHTML = "";
+  const ids = Object.keys(users);
+  ids.forEach(id => {
+    const u = users[id];
+    const item = document.createElement("div");
+    item.className = "user-item" + (id === myId ? " me" : "");
+    item.innerHTML = "<div class='avatar'>" + escapeHtml((u.name || "U").slice(0,2).toUpperCase()) + "</div><div><strong>" + escapeHtml(u.name) + "</strong><div style='font-size:12px;color:var(--muted)'>"+ (id === myId ? "You" : "Click to chat") + "</div></div>";
+    if(id !== myId) item.onclick = () => startPrivateChat(id);
+    usersEl.appendChild(item);
+  });
+  myNameEl.textContent = myName || "";
+}
+
+function escapeHtml(s){ 
+  if(!s) return ""; 
+  return s.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;"); 
+}
+
+document.getElementById("sendBtn").addEventListener("click", () => { 
+  sendMessage(msgInput.value); 
+  msgInput.value = ""; 
+  socket.emit('stopped_typing'); 
+});
+
+msgInput.addEventListener("keydown", (e) => { 
+  if(e.key === "Enter") { 
+    e.preventDefault(); 
+    sendMessage(msgInput.value); 
+    msgInput.value = ""; 
+    socket.emit('stopped_typing'); 
+  } 
+});
+
+document.getElementById("logout").addEventListener("click", () => { 
+  localStorage.removeItem("exha_name"); 
+  localStorage.removeItem("exha_id");
+  location.reload(); 
+});
+
+document.getElementById("loginBtn").addEventListener("click", attemptLogin);
+document.getElementById("passwordField").addEventListener("keydown", (e) => { 
+  if(e.key === "Enter") attemptLogin(); 
+});
+
+function attemptLogin(){
+  const name = document.getElementById("nameField").value.trim();
+  const pass = document.getElementById("passwordField").value;
+  if(!name){ loginMsg.textContent = "Please enter your display name 😊"; return; }
+  if(pass !== PASSWORD){ loginMsg.textContent = "Wrong password — try again 🔐"; return; }
+  myName = name;
+  localStorage.setItem("exha_name", myName);
+  socket.emit('login', { name: myName, password: PASSWORD, userId: myId });
+}
+
+function attemptAutoLogin(){
+  socket.emit('login', { name: myName, password: PASSWORD, userId: myId });
+}
+
+function showApp(){
+  loginScreen.style.display = "none";
+  app.style.display = "grid";
+  renderUsers();
+  renderTabs();
+  renderMessages();
+}
+</script>
+</body>
+</html>
